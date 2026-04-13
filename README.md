@@ -5,6 +5,22 @@
 
 ---
 
+## ⚠️ Important – Before You Start
+
+### Disable Smart App Control (Windows 11 only)
+Windows 11's **Smart App Control** may block JARVIS from running.  
+You **must** disable it before starting:
+
+1. Open **Windows Security** (search in Start Menu)
+2. Click **App & browser control**
+3. Click **Smart App Control settings**
+4. Set it to **Off**
+
+> ⚠️ Windows will warn you – this is normal. Smart App Control can be turned back on anytime.  
+> Without disabling it, JARVIS may be blocked from starting.
+
+---
+
 ## 🚀 Quick Start
 
 ### Step 1 – Download
@@ -121,6 +137,9 @@ Double-click either file to start. A **blue "J" icon** will appear in your syste
 **Tray icon doesn't appear**
 - Run `start_jarvis.bat` instead to see error messages in the console
 
+**JARVIS is blocked / won't start**
+- Disable Smart App Control (see top of this README)
+
 ---
 
 ## 🔑 API Key
@@ -129,4 +148,4 @@ The API key is included – no setup needed.
 
 ---
 
-*Inspired by Tony Stark*
+*Made with ❤️ inspired by Tony Stark*
