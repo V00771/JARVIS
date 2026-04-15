@@ -1,45 +1,34 @@
-Kopieren
-
 @echo off
 cd /d "%~dp0"
 echo ================================
 echo    J.A.R.V.I.S. Installer
 echo ================================
 echo.
- 
-:: Pruefen ob Python installiert ist
-python --version >nul 2>&1
-if %errorlevel% neq 0 (
-    goto install_python
+
+:: Pruefen ob Python 3.12 installiert ist
+py -3.12 --version >nul 2>&1
+if %errorlevel% equ 0 (
+    echo Python 3.12 gefunden!
+    set PYTHON_CMD=py -3.12
+    goto install_libs
 )
- 
-:: Python Version pruefen
-for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYVER=%%i
-for /f "tokens=1,2 delims=." %%a in ("%PYVER%") do (
-    set PYMAJOR=%%a
-    set PYMINOR=%%b
+
+:: Alternative: python3.12 oder python pruefen
+python --version 2>&1 | findstr "3.12" >nul
+if %errorlevel% equ 0 (
+    echo Python 3.12 gefunden!
+    set PYTHON_CMD=python
+    goto install_libs
 )
- 
-:: Pruefen ob Version zwischen 3.10 und 3.12
-if "%PYMAJOR%" == "3" (
-    if %PYMINOR% GEQ 10 (
-        if %PYMINOR% LEQ 12 (
-            echo Python %PYVER% gefunden - OK!
-            goto install_libs
-        )
-    )
-)
- 
-echo Python %PYVER% gefunden aber falsche Version!
-echo Benoetigt: Python 3.10 - 3.12
-echo.
- 
+
+echo Python 3.12 nicht gefunden!
+goto install_python
+
 :install_python
 echo Installiere Python 3.12.9...
-curl -o "%~dp0python_installer.exe" https://www.python.org/ftp/python/3.12.9/python-3.12.9-amd64.exe
+curl -o "%~dp0python_installer.exe" https://www.python.org/ftp/python/3.12.9/python-3.12.9-amd64.exe 
 if %errorlevel% neq 0 (
-    echo Download fehlgeschlagen! Bitte manuell installieren:
-    echo https://www.python.org/downloads/release/python-3129/
+    echo Download fehlgeschlagen! Bitte manuell installieren.
     pause
     exit
 )
@@ -49,42 +38,30 @@ echo Python 3.12.9 installiert!
 echo Bitte install.bat nochmal ausfuehren!
 pause
 exit
- 
+
 :install_libs
 echo.
- 
-:: FIX: pip aktualisieren damit alle Pakete korrekt installiert werden
+
 echo Aktualisiere pip...
-python -m pip install --upgrade pip >nul 2>&1
- 
+%PYTHON_CMD% -m pip install --upgrade pip
+
 echo Installiere JARVIS Libraries...
-pip install speechrecognition pygame edge-tts groq pillow pystray pynput
-if %errorlevel% neq 0 (
-    echo Fehler bei der Installation! Bitte als Administrator ausfuehren.
-    pause
-    exit /b 1
-)
- 
-:: FIX: pyaudio separat behandeln - schlaegt auf Windows ohne C-Compiler oft fehl
+%PYTHON_CMD% -m pip install speechrecognition pygame edge-tts groq pillow pystray pynput
+
+:: PyAudio separat
 echo Installiere PyAudio...
-pip install pyaudio >nul 2>&1
+%PYTHON_CMD% -m pip install pyaudio >nul 2>&1
 if %errorlevel% neq 0 (
     echo PyAudio pip-Install fehlgeschlagen, versuche Pre-Built Wheel...
-    pip install pipwin >nul 2>&1
-    pipwin install pyaudio >nul 2>&1
-    if %errorlevel% neq 0 (
-        echo WARNUNG: PyAudio konnte nicht installiert werden.
-        echo Bitte manuell installieren: https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyaudio
-        pause
-    )
+    %PYTHON_CMD% -m pip install pipwin
+    %PYTHON_CMD% -m pipwin install pyaudio
 )
- 
+
 echo.
 echo ================================
 echo  Installation abgeschlossen!
 echo  JARVIS wird jetzt gestartet...
 echo ================================
 timeout /t 2 >nul
- 
-:: FIX: autostart.vbs direkt starten statt nur hinweisen
+
 start "" wscript "%~dp0autostart.vbs"
