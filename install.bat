@@ -1,23 +1,25 @@
+Kopieren
+
 @echo off
 cd /d "%~dp0"
 echo ================================
 echo    J.A.R.V.I.S. Installer
 echo ================================
 echo.
-
+ 
 :: Pruefen ob Python installiert ist
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
     goto install_python
 )
-
+ 
 :: Python Version pruefen
 for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYVER=%%i
 for /f "tokens=1,2 delims=." %%a in ("%PYVER%") do (
     set PYMAJOR=%%a
     set PYMINOR=%%b
 )
-
+ 
 :: Pruefen ob Version zwischen 3.10 und 3.12
 if "%PYMAJOR%" == "3" (
     if %PYMINOR% GEQ 10 (
@@ -27,11 +29,11 @@ if "%PYMAJOR%" == "3" (
         )
     )
 )
-
+ 
 echo Python %PYVER% gefunden aber falsche Version!
 echo Benoetigt: Python 3.10 - 3.12
 echo.
-
+ 
 :install_python
 echo Installiere Python 3.12.9...
 curl -o "%~dp0python_installer.exe" https://www.python.org/ftp/python/3.12.9/python-3.12.9-amd64.exe
@@ -47,14 +49,42 @@ echo Python 3.12.9 installiert!
 echo Bitte install.bat nochmal ausfuehren!
 pause
 exit
-
+ 
 :install_libs
 echo.
+ 
+:: FIX: pip aktualisieren damit alle Pakete korrekt installiert werden
+echo Aktualisiere pip...
+python -m pip install --upgrade pip >nul 2>&1
+ 
 echo Installiere JARVIS Libraries...
-pip install speechrecognition pygame edge-tts groq pillow pystray pynput pyaudio
+pip install speechrecognition pygame edge-tts groq pillow pystray pynput
+if %errorlevel% neq 0 (
+    echo Fehler bei der Installation! Bitte als Administrator ausfuehren.
+    pause
+    exit /b 1
+)
+ 
+:: FIX: pyaudio separat behandeln - schlaegt auf Windows ohne C-Compiler oft fehl
+echo Installiere PyAudio...
+pip install pyaudio >nul 2>&1
+if %errorlevel% neq 0 (
+    echo PyAudio pip-Install fehlgeschlagen, versuche Pre-Built Wheel...
+    pip install pipwin >nul 2>&1
+    pipwin install pyaudio >nul 2>&1
+    if %errorlevel% neq 0 (
+        echo WARNUNG: PyAudio konnte nicht installiert werden.
+        echo Bitte manuell installieren: https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyaudio
+        pause
+    )
+)
+ 
 echo.
 echo ================================
 echo  Installation abgeschlossen!
-echo  Starte jetzt autostart.vbs
+echo  JARVIS wird jetzt gestartet...
 echo ================================
-pause
+timeout /t 2 >nul
+ 
+:: FIX: autostart.vbs direkt starten statt nur hinweisen
+start "" wscript "%~dp0autostart.vbs"
