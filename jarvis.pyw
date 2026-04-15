@@ -38,8 +38,14 @@ Rules:
 - Sound natural and conversational, never robotic
 - Remember context from the entire conversation
 - If weather data is provided, use it naturally
-- If the user asks to read a file, IMMEDIATELY use read_file action WITHOUT asking first
-- If the user asks to create a file with content, IMMEDIATELY create it WITHOUT asking first
+
+CRITICAL ACTION RULES — NO EXCEPTIONS:
+- You NEVER ask the user for confirmation before taking an action.
+- You NEVER say "Shall I create that?", "Would you like me to?", "Should I go ahead?", or anything similar.
+- You ALWAYS perform the action immediately and inform the user it is done.
+- If a file name is not specified, invent a sensible one yourself.
+- If content is not fully specified, generate appropriate content yourself.
+- Do NOT hesitate. Do NOT ask. ALWAYS act.
 
 IMPORTANT - PC ACTIONS:
 When the user wants a file created, program opened, screenshot taken, etc.,
@@ -76,6 +82,7 @@ running       = True
 speaking      = False
 stop_speaking = False
 in_convo      = False
+_mixer_ready  = False
 
 # GEDAECHTNIS
 def load_memory():
@@ -120,7 +127,8 @@ def execute_action(action_json):
         atype  = action.get("type", "")
 
         if atype == "create_file":
-            filename = action.get("filename", "file.txt")
+            # FIX: Path traversal prevention – strip directory components from filename
+            filename = os.path.basename(action.get("filename", "file.txt"))
             content  = action.get("content", "")
             path     = os.path.join(FILES_FOLDER, filename)
             with open(path, "w", encoding="utf-8") as f:
@@ -129,7 +137,8 @@ def execute_action(action_json):
             return f"Done. '{filename}' has been saved to the JARVIS_Files folder, Sir."
 
         elif atype == "read_file":
-            filename = action.get("filename", "")
+            # FIX: Path traversal prevention
+            filename = os.path.basename(action.get("filename", ""))
             path     = os.path.join(FILES_FOLDER, filename)
             if os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
@@ -138,7 +147,8 @@ def execute_action(action_json):
             return "I couldn't find that file, Sir."
 
         elif atype == "delete_file":
-            filename = action.get("filename", "")
+            # FIX: Path traversal prevention
+            filename = os.path.basename(action.get("filename", ""))
             path     = os.path.join(FILES_FOLDER, filename)
             if os.path.exists(path):
                 os.remove(path)
@@ -166,7 +176,11 @@ def execute_action(action_json):
             else:
                 exe = PROGRAMS.get(program)
                 if exe and os.path.exists(exe):
-                    subprocess.Popen(exe)
+                    # FIX: Discord needs special args to actually launch
+                    if program == "discord":
+                        subprocess.Popen([exe, "--processStart", "Discord.exe"])
+                    else:
+                        subprocess.Popen(exe)
                 else:
                     subprocess.Popen(f'start {program}', shell=True)
             print(f"  Opened: {program}")
@@ -222,7 +236,7 @@ def speak(text):
     path = None
     try:
         path = asyncio.run(_tts(clean))
-        pygame.mixer.init()
+        # FIX: mixer already initialized in main(); no re-init here
         pygame.mixer.music.load(path)
         pygame.mixer.music.play()
         while pygame.mixer.music.get_busy():
@@ -230,17 +244,27 @@ def speak(text):
                 pygame.mixer.music.stop()
                 print("  Interrupted.\n")
                 break
-        pygame.mixer.music.unload()
+            pygame.time.Clock().tick(10)
+        # FIX: unload() may not exist in older pygame — use stop() + load workaround
+        try:
+            pygame.mixer.music.unload()
+        except AttributeError:
+            pygame.mixer.music.stop()
     except Exception as e:
         print(f"  TTS error: {e}")
     finally:
         speaking      = False
         stop_speaking = False
+        # FIX: Delay temp-file deletion so Windows releases the file lock
         if path:
-            try:
-                os.remove(path)
-            except Exception:
-                pass
+            def _delayed_remove(p):
+                import time
+                time.sleep(0.5)
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
+            threading.Thread(target=_delayed_remove, args=(path,), daemon=True).start()
 
 # GEDAECHTNIS KLASSE
 class JarvisMemory:
@@ -266,12 +290,16 @@ class JarvisAI:
     def think(self, user_input):
         now    = datetime.datetime.now().strftime("%H:%M, %d %B %Y")
         system = SYSTEM_PROMPT.format(name=USER_NAME, time=now)
-        self.memory.add("user", user_input)
 
+        # FIX: Weather injected into the user message itself, not as a second
+        # user entry — avoids two consecutive user-role messages (API violation)
+        full_input = user_input
         if any(w in user_input.lower() for w in ["weather", "wetter", "temperature", "rain", "regen", "forecast"]):
             w = get_weather("Vienna")
             if w:
-                self.memory.add("user", f"[Live weather: {w}]")
+                full_input = f"{user_input} [Live weather data: {w}]"
+
+        self.memory.add("user", full_input)
 
         try:
             res = self.client.chat.completions.create(
@@ -395,8 +423,10 @@ def quit_action(icon, item):
 
 def main():
     global jarvis
+    # FIX: mixer initialized once here, not on every speak() call
     pygame.mixer.pre_init(44100, -16, 2, 512)
     pygame.init()
+    pygame.mixer.init()
     jarvis = JarvisAI()
     threading.Thread(target=voice_loop, daemon=True).start()
     icon = pystray.Icon(
